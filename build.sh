@@ -18,8 +18,13 @@ with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
         if name.startswith(".") or name == "__pycache__":
             continue
         path = os.path.join(root, name)
-        if os.path.isfile(path):
-            z.write(path, name)
+        if not os.path.isfile(path):
+            continue
+        info = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
+        info.compress_type = zipfile.ZIP_DEFLATED
+        mode = 0o755 if (name.endswith(".sh") or name == "dsh-root") else 0o644
+        info.external_attr = mode << 16
+        z.writestr(info, open(path, "rb").read())
 print("files:", zipfile.ZipFile(out).namelist())
 PY
 
