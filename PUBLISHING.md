@@ -39,3 +39,12 @@ KernelSU 管理器的「模块仓库」只收录索引里的仓库。按它的�
 
 - 发布前把 `LICENSE` 里的 `<YOUR NAME>` 换成你自己
 - 不要把 `~/.dsh`、token、设备路径等私人信息带进仓库（本仓库源码里只有 App 包名，没有 token）
+
+## 换设备恢复仓库
+
+解压仓库 zip 后如果 `git status` 提示文件 mode 变化（换电脑/Windows 解压常见），执行：
+
+```sh
+git config core.fileMode false
+git checkout -- .
+```
