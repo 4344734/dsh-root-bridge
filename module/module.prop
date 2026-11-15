@@ -1,0 +1,6 @@
+id=dsh-root-bridge
+name=DSH Go Root Bridge
+version=1.4
+versionCode=5
+author=DSH Go
+description=给 DSH Go 容器一条 root 命令通道（仅 127.0.0.1:47913，token 校验）。看门狗每 15 秒检查：桥挂了自动重拉，dsh-root 缺失或变旧自动补回；另带可配置的 ColorOS 速冻解冻助手。

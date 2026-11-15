@@ -1,0 +1,265 @@
+#!/usr/bin/env python3
+"""dsh-root — run commands as real root outside the proot container.
+
+Talks to the root bridge (toybox nc on 127.0.0.1) from the KernelSU module
+"dsh-root-bridge". This process is the normal app uid; the bridge runs as root.
+
+  dsh-root '<cmd>'                run a command
+  echo ... | dsh-root             run stdin
+  dsh-root --status               is the bridge up?
+  dsh-root --stream '<cmd>'       print output as it arrives (logcat, ping…)
+  dsh-root --timeout 30 '<cmd>'   stop the command after N seconds
+  dsh-root --as 2000 '<cmd>'      run as another uid (su <uid>)
+  dsh-root --put <local> <remote> upload a file
+  dsh-root --get <remote> [local] download a file (stdout when local omitted)
+  dsh-root --bg '<cmd>'           run in background, print job id
+  dsh-root --jobs                 list background jobs
+  dsh-root --job <id> [lines]     show a job's log (default 50 lines)
+  dsh-root --kill <id>            stop a background job
+"""
+import base64
+import binascii
+import os
+import secrets
+import socket
+import sys
+
+HOME = os.path.expanduser("~") or "/root"
+if not os.path.isdir(os.path.join(HOME, ".dsh")):
+    HOME = "/root"
+TOKEN = os.path.join(HOME, ".dsh", "rootd", "token")
+PORTF = os.path.join(HOME, ".dsh", "rootd", "port")
+MARK = b"__RC__"
+PORT = 47913
+JOB_DIR = "/data/local/tmp/dsh-jobs"
+CHUNK = 48 * 1024
+
+HINT = ("  KernelSU 模块 dsh-root-bridge 没启用，或桥被杀。\n"
+        "  手动启动：sh /sdcard/Download/DSH-Go/root-bridge/start.sh")
+FRAMEWORK_HINT = ("提示：这是 Android 框架命令，ColorOS 在这条 root 通道上挡了它。\n"
+                  "  文件/系统类命令正常；框架类可以改用手机操控工具，或 dumpsys 只读查询。")
+
+
+def shq(text):
+    return "'" + text.replace("'", "'\\''") + "'"
+
+
+def ensure_token():
+    os.makedirs(os.path.dirname(TOKEN), mode=0o700, exist_ok=True)
+    try:
+        value = open(TOKEN, encoding="utf-8").read().strip()
+    except OSError:
+        value = ""
+    if not value:
+        value = secrets.token_hex(24)
+        fd = os.open(TOKEN, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(value + "\n")
+    try:
+        int(open(PORTF, encoding="utf-8").read().strip())
+    except (OSError, ValueError):
+        with open(PORTF, "w", encoding="utf-8") as f:
+            f.write(f"{PORT}\n")
+
+
+def die(msg, code=111):
+    sys.stderr.write(msg.rstrip() + "\n")
+    sys.exit(code)
+
+
+def connect(timeout=5):
+    try:
+        port = int(open(PORTF, encoding="utf-8").read().strip())
+        sock = socket.create_connection(("127.0.0.1", port), timeout=timeout)
+    except OSError:
+        die(f"dsh-root: root 桥没在跑。\n{HINT}")
+    sock.settimeout(None)
+    return sock, port
+
+
+def send(sock, cmd):
+    token = open(TOKEN, encoding="utf-8").read().strip()
+    sock.sendall(token.encode() + b"\n" + cmd.encode())
+    sock.shutdown(socket.SHUT_WR)
+
+
+def run(cmd, stream=False, timeout=None, as_uid=None, sink=None, quiet=False):
+    """Run one command; returns its exit code. sink=base64 file for --get."""
+    if timeout:
+        cmd = f"timeout {int(timeout)} /system/bin/sh -c {shq(cmd)}"
+    if as_uid:
+        cmd = f"su {int(as_uid)} -c {shq(cmd)}"
+    sock, _ = connect()
+    send(sock, cmd)
+
+    buf = b""
+    rc = None
+    dec = b""
+    out = []
+
+    def emit(payload):
+        nonlocal dec
+        if not payload:
+            return
+        if sink is not None:
+            dec += payload
+            usable = len(dec) - len(dec) % 4
+            if usable:
+                chunk, dec = dec[:usable], dec[usable:]
+                try:
+                    sink.write(base64.b64decode(chunk))
+                except binascii.Error:
+                    pass
+        elif stream:
+            sys.stdout.buffer.write(payload)
+            sys.stdout.buffer.flush()
+        else:
+            out.append(payload)
+
+    try:
+        while True:
+            try:
+                data = sock.recv(65536)
+            except ConnectionResetError:
+                data = b""
+            if not data:
+                break
+            buf += data
+            at = buf.find(MARK)
+            if at >= 0:
+                emit(buf[:at])
+                rest = buf[at + len(MARK):]
+                buf = b""
+                try:
+                    rc = int(rest.split(b"\n", 1)[0].strip())
+                except ValueError:
+                    rc = 1
+                break
+            keep = len(MARK) - 1
+            if len(buf) > keep:
+                emit(buf[:-keep])
+                buf = buf[-keep:]
+    finally:
+        sock.close()
+
+    emit(buf)
+    if rc is None:
+        rc = 1
+
+    if sink is not None:
+        if dec:
+            try:
+                sink.write(base64.b64decode(dec + b"=" * (-len(dec) % 4)))
+            except binascii.Error:
+                pass
+        sink.flush()
+    elif not stream and not quiet:
+        text = b"".join(out).decode("utf-8", "replace")
+        if text:
+            sys.stdout.write(text if text.endswith("\n") else text + "\n")
+        if "Failed transaction (2147483646)" in text:
+            sys.stderr.write(FRAMEWORK_HINT + "\n")
+    return rc
+
+
+def main():
+    ensure_token()
+    args = sys.argv[1:]
+    if not args:
+        cmd = sys.stdin.read()
+        if not cmd.strip():
+            die("用法：dsh-root '<命令>'  或  echo '<命令>' | dsh-root", 2)
+        sys.exit(run(cmd))
+
+    head = args[0]
+    rest = args[1:]
+
+    if head in ("--help", "-h"):
+        print(__doc__.strip())
+        return
+    if head in ("--status", "--ping"):
+        sock, port = connect(timeout=3)
+        sock.close()
+        print(f"dsh-root: 桥正常（127.0.0.1:{port}）")
+        return
+    if head == "--stream":
+        sys.exit(run(" ".join(rest), stream=True))
+    if head == "--timeout":
+        if len(rest) < 2:
+            die("用法：dsh-root --timeout 秒 '<命令>'", 2)
+        sys.exit(run(" ".join(rest[1:]), timeout=rest[0]))
+    if head == "--as":
+        if len(rest) < 2:
+            die("用法：dsh-root --as UID '<命令>'", 2)
+        sys.exit(run(" ".join(rest[1:]), as_uid=rest[0]))
+
+    if head == "--put":
+        if len(rest) != 2:
+            die("用法：dsh-root --put <本地文件> <远端路径>", 2)
+        local, remote = rest
+        with open(local, "rb") as f:
+            data = f.read()
+        if run(f": > {shq(remote)}", quiet=True) != 0:
+            die("dsh-root: 无法在远端创建文件")
+        for at in range(0, len(data), CHUNK):
+            chunk = base64.b64encode(data[at:at + CHUNK]).decode()
+            if run(f"printf '%s' {shq(chunk)} | base64 -d >> {shq(remote)}", quiet=True) != 0:
+                die(f"dsh-root: 上传中断（第 {at // CHUNK + 1} 块）")
+        sys.stderr.write(f"dsh-root: 已上传 {local} -> {remote}（{len(data)} 字节）\n")
+        return
+
+    if head == "--get":
+        if not rest:
+            die("用法：dsh-root --get <远端路径> [本地文件]", 2)
+        remote = rest[0]
+        if len(rest) >= 2:
+            with open(rest[1], "wb") as f:
+                rc = run(f"base64 -w0 {shq(remote)}", sink=f)
+            if rc == 0:
+                sys.stderr.write(f"dsh-root: 已下载 {remote} -> {rest[1]}\n")
+            sys.exit(rc)
+        sys.exit(run(f"base64 -w0 {shq(remote)}", sink=sys.stdout.buffer))
+
+    if head == "--bg":
+        cmd = " ".join(rest)
+        if not cmd:
+            die("用法：dsh-root --bg '<命令>'", 2)
+        script = (f"mkdir -p {JOB_DIR}; "
+                  f"id=j$(date +%s%N | tail -c 7); "
+                  f"setsid /system/bin/sh -c {shq(cmd)} > {JOB_DIR}/$id.log 2>&1 & "
+                  f"echo $! > {JOB_DIR}/$id.pid; echo $id")
+        sys.exit(run(script))
+
+    if head == "--jobs":
+        script = (f"mkdir -p {JOB_DIR}; for p in {JOB_DIR}/*.pid; do "
+                  f"[ -e \"$p\" ] || continue; id=$(basename \"$p\" .pid); "
+                  f"pid=$(cat \"$p\"); "
+                  f"if kill -0 \"$pid\" 2>/dev/null; then st=running; else st=done; fi; "
+                  f"sz=$(stat -c %s {JOB_DIR}/$id.log 2>/dev/null); "
+                  f"echo \"$id $pid $st ${{sz:-0}}B\"; done")
+        sys.exit(run(script))
+
+    if head == "--job":
+        if not rest:
+            die("用法：dsh-root --job <id> [行数]", 2)
+        n = rest[1] if len(rest) > 1 and rest[1].isdigit() else "50"
+        sys.exit(run(f"tail -n {n} {JOB_DIR}/{shq(rest[0])}.log 2>/dev/null "
+                     f"|| echo '(没有这个任务的日志)'"))
+
+    if head == "--kill":
+        if not rest:
+            die("用法：dsh-root --kill <id>", 2)
+        jid = shq(rest[0])
+        script = (f"pid=$(cat {JOB_DIR}/{jid}.pid 2>/dev/null); "
+                  f"if [ -n \"$pid\" ] && kill -TERM -$pid 2>/dev/null; then echo killed $pid; "
+                  f"else echo '没能结束（任务可能已退出）'; fi")
+        sys.exit(run(script))
+
+    if head.startswith("--"):
+        die(f"dsh-root: 未知选项 {head}（dsh-root --help 看用法）", 2)
+
+    sys.exit(run(" ".join(args)))
+
+
+if __name__ == "__main__":
+    main()
