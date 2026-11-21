@@ -1,6 +1,6 @@
 {
   "name": "dsh-root-bridge",
-  "version": "0.1.1",
+  "version": "0.1.0",
   "description": "在 DSH 里以真正的 root 执行 Android 侧命令（配合 KernelSU 模块 dsh-root-bridge）",
   "type": "module",
   "main": "src/index.js",
