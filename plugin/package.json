@@ -1,0 +1,39 @@
+{
+  "name": "dsh-root-bridge",
+  "version": "0.1.0",
+  "description": "在 DSH 里以真正的 root 执行 Android 侧命令（配合 KernelSU 模块 dsh-root-bridge）",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "android",
+    "root",
+    "kernelsu"
+  ],
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "4.0.5 || 4.1.0",
+    "@deepseek-ai/dsh-tools": "0.2.1-rc.4 || 0.2.2-rc.1"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "license": "MIT"
+}

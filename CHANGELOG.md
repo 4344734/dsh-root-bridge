@@ -1,5 +1,11 @@
 # Changelog
 
+## 插件 0.1.0（npm: dsh-root-bridge）
+
+- 新增 `root_exec` 工具：通过 KernelSU 模块的 root 桥，在 Android 侧以真 root 执行命令
+- 输出合并 stdout/stderr 和退出码；支持超时
+- 桥没跑或没装模块时给出可操作的提示
+
 ## v1.5
 
 - 去掉周期轮询：桥改成父进程 `wait` 监督，退出即重拉（健康时零唤醒）

@@ -1,14 +1,26 @@
-# DSH Go Root Bridge
+# DSH Root Bridge
 
-给 [DSH Go](https://github.com/ccch1mneyyy/dsh-Go) 手机 App 的 Linux 容器开一条**真正的 root 命令通道**的 KernelSU 模块。
+给 DSH（尤其 [DSH Go](https://github.com/ccch1mneyyy/dsh-Go) 手机 App）的 proot 容器开一条**真正的 root 命令通道**。
 
-> 非官方项目，与 DSH Go 作者无关；装模块就是在自己手机上开常驻 root 服务，风险自担。
+> 非官方项目，与 DSH / DSH Go 作者无关；装模块就是在自己手机上开常驻 root 服务，风险自担。
+
+## 两个部分
+
+| 部分 | 是什么 | 从哪装 |
+|---|---|---|
+| **KernelSU 模块** | 在容器外起 `127.0.0.1:47913` 的 root 命令桥；容器里给一个 `dsh-root` 命令 | GitHub [Releases](../../releases) |
+| **DSH 插件**（npm: `dsh-root-bridge`） | 给模型一个 `root_exec` 工具，走同一个桥 | DSH Go 插件市场 / npm |
+
+先装模块（提供能力），再装插件（给模型用）。
 
 ## 为什么需要
 
-DSH Go 的本机引擎跑在 proot 里，容器里的 `uid=0` 是假 root：`su` 执行不了，读不到其他 App 的数据，也不能 `mount`、改系统文件。
+DSH Go 的本机引擎跑在 proot 里，容器里的 `uid=0` 是假 root：`su` 执行不了，
+读不到其他 App 的数据，也不能 `mount`、改系统文件。
 
-这个模块在容器外起一个只监听 `127.0.0.1` 的命令服务（token 校验），容器里的 `dsh-root` 连过去，命令就以真正的 root 在系统侧执行，输出和退出码原样带回。
+模块在容器外起一个只监听 `127.0.0.1` 的命令服务（token 校验），
+容器里的 `dsh-root`（以及插件里的 `root_exec` 工具）连过去，
+命令就以真正的 root 在 Android 侧执行，输出和退出码原样带回。
 
 ## 特性
 
@@ -17,13 +29,7 @@ DSH Go 的本机引擎跑在 proot 里，容器里的 `uid=0` 是假 root：`su`
 - 流式输出、超时、换 uid、文件上传下载、后台任务
 - 可选 ColorOS 速冻解冻助手（默认只看 DSH Go）
 
-## 要求
-
-- DSH Go（本机引擎，proot 模式）
-- KernelSU（已验证；Magisk 未测试）
-- 手机已 root
-
-## 安装
+## 安装模块
 
 1. 到 [Releases](../../releases) 下载最新的 `dsh-root-bridge-vX.Y.zip`
 2. KernelSU → 模块 → 右下角 `+` → 选择这个 zip
@@ -37,87 +43,76 @@ dsh-root 'id'
 # uid=0(root) gid=0(root) context=u:r:ksu:s0
 ```
 
-## 用法
+## 安装插件
+
+- DSH Go：设置 › 插件 › 插件市场，搜 `dsh-root-bridge`，装到当前主机
+- 电脑上的 DSH：`npm i dsh-root-bridge`，或用插件管理器从 npm 安装
+
+装好后模型会多一个 `root_exec` 工具：
+
+```text
+root_exec({ command: "id -u" })  →  exit 0, 输出 0
+```
+
+## 用法（dsh-root 命令）
 
 ```sh
 dsh-root 'id'                       # 真 root
-dsh-root 'ls /data/data | head'     # 读其他 App 的数据
-echo 'df -h /data' | dsh-root       # 从 stdin 传命令
+dsh-root 'ls /data/data | head'
+echo 'df -h /data' | dsh-root
 
 dsh-root --stream 'logcat -v time'  # 边跑边出
-dsh-root --timeout 30 '<命令>'      # 30 秒后强杀（退出码 124）
-dsh-root --as 2000 '<命令>'         # 换成别的 uid 跑
+dsh-root --timeout 30 '<命令>'      # 超时强杀（rc=124）
+dsh-root --as 2000 '<命令>'         # 换 uid
 
-dsh-root --put 本地文件 /sdcard/x   # 上传
-dsh-root --get /sdcard/x 本地文件   # 下载；省略本地文件就打到 stdout
+dsh-root --put 本地 /sdcard/x       # 上传
+dsh-root --get /sdcard/x 本地       # 下载
 
-dsh-root --bg '长任务'              # 后台任务，返回任务号
-dsh-root --jobs                     # 列任务
-dsh-root --job j123456 80           # 看日志最后 80 行
-dsh-root --kill j123456             # 结束任务
+dsh-root --bg '长任务'              # 后台任务
+dsh-root --jobs / --job <id> / --kill <id>
 ```
 
 ## 已知限制
 
-`pm` / `am` / `settings` / `input` / `wm` 这类 Android 框架命令会报：
-
-```
-cmd: Failure calling service package: Failed transaction (2147483646)
-```
-
-这是 ColorOS 等系统的 binder 限制，root 域和 shell 域都绕不过，不是模块的问题。
+`pm` / `am` / `settings` / `input` / `wm` 这类 Android 框架命令会报
+`Failed transaction (2147483646)`：ColorOS 等系统的 binder 限制，root 域和 shell 域都绕不过。
 文件、系统、`dumpsys`、`screencap`、`iptables`、`/proc`、`/sys` 都正常。
 需要操作界面的话，用 DSH Go 自带的手机操控（走 Shizuku）。
 
-## 自愈机制（事件驱动，平时不轮询）
+## 省电设计（模块 v1.5 起）
 
-- 桥进程被杀：父进程立即重拉（`bridge.sh` 里 `wait`，健康时零唤醒）
-- App 更新把 `/usr/local/bin/dsh-root` 删掉或换成旧版：`inotifyd` 监听文件事件，立刻补回
-- 开机时检查一次；rootfs 被整体替换也会触发事件重新检查
-- 空闲唤醒实测：`bridge.sh` 0 次/分、`client-watch.sh` 0 次/分、
-  `thaw.sh`（30 秒）2 次/分；旧版（15 秒轮询 + 5 秒解冻）是 156 次/分
+- 桥挂掉：监督进程立即重拉，健康时零唤醒
+- 容器客户端：开机检查一次 + `inotifyd` 文件事件补回，不轮询
+- 解冻助手默认 30 秒一次，可关：`/data/adb/dsh-root-bridge.conf` 里 `THAW_ENABLE=0`
 
-## 解冻助手（可选）
-
-ColorOS 会冻结后台 App。默认每 30 秒检查一次（旧版是 5 秒）；可以按需关掉或调整：
-
-```sh
-# /data/adb/dsh-root-bridge.conf
-THAW_ENABLE=0            # 完全关掉
-THAW_INTERVAL=60         # 或放慢到 60 秒
-THAW_APPS="io.github.ccch1mneyyy.dsh_app com.example.other"
-```
+实测空闲唤醒：旧版 156 次/分 → v1.5 2 次/分。
 
 ## 安全
 
-- 服务只绑定 `127.0.0.1`，不对外网开放
-- token 在 App 私有目录 `~/.dsh/rootd/token`，其他普通 App 读不到
-- **token 泄露 = root 泄露**：不要分享 token 或整个 `~/.dsh`
-- 不需要时在 KernelSU 里禁用/卸载模块
+- root 桥只绑定 `127.0.0.1`，不对外网开放
+- token 在 App 私有目录 `~/.dsh/rootd/token`；**token 泄露 = 这台机器的 root 泄露**
+- 只在你自己信任的设备上用；不需要时在 KernelSU 里禁用/卸载模块
 
 ## 仓库结构
 
 ```
-module/    模块源文件（KernelSU 模块根目录内容）
-dist/      打包好的可安装 zip
-build.sh   从 module/ 重新打包到 dist/
+module/    KernelSU 模块源文件（打包成 dist/*.zip）
+plugin/    DSH 插件（发布到 npm）
+market/    插件市场仓库要求的条目（提 PR 用）
+dist/      打包好的模块 zip
+build.sh   从 module/ 重新打包
 ```
 
 ## 自己构建
 
 ```sh
-sh build.sh
+sh build.sh                                  # 生成 dist/dsh-root-bridge-v<version>.zip
+cd plugin && npm pack                        # 检查插件 tarball
 ```
-
-会生成 `dist/dsh-root-bridge-v<version>.zip`（版本号取自 `module/module.prop`）。
-
-## 卸载
-
-KernelSU → 模块 → 卸载。模块自带的 `uninstall.sh` 会清理临时文件和容器里的客户端。
 
 ## License
 
-[MIT](LICENSE)（发布前把版权人改成你自己）
+[MIT](LICENSE)
 
 ---
 
