@@ -69,18 +69,22 @@ cmd: Failure calling service package: Failed transaction (2147483646)
 文件、系统、`dumpsys`、`screencap`、`iptables`、`/proc`、`/sys` 都正常。
 需要操作界面的话，用 DSH Go 自带的手机操控（走 Shizuku）。
 
-## 自愈机制
+## 自愈机制（事件驱动，平时不轮询）
 
-- 桥进程被杀：看门狗 15 秒内重拉
-- App 更新把 `/usr/local/bin/dsh-root` 删掉或换成旧版：15 秒内从模块补回
-- runtime 换版本导致 rootfs 路径变化：看门狗自动找 `/data/user/0/*/files/runtime/rootfs`
+- 桥进程被杀：父进程立即重拉（`bridge.sh` 里 `wait`，健康时零唤醒）
+- App 更新把 `/usr/local/bin/dsh-root` 删掉或换成旧版：`inotifyd` 监听文件事件，立刻补回
+- 开机时检查一次；rootfs 被整体替换也会触发事件重新检查
+- 空闲唤醒实测：`bridge.sh` 0 次/分、`client-watch.sh` 0 次/分、
+  `thaw.sh`（30 秒）2 次/分；旧版（15 秒轮询 + 5 秒解冻）是 156 次/分
 
-## 速冻解冻助手（可选）
+## 解冻助手（可选）
 
-ColorOS 会冻结后台 App。模块默认只解冻 DSH Go；想多看几个 App，编辑
-`/data/adb/dsh-root-bridge.conf`：
+ColorOS 会冻结后台 App。默认每 30 秒检查一次（旧版是 5 秒）；可以按需关掉或调整：
 
 ```sh
+# /data/adb/dsh-root-bridge.conf
+THAW_ENABLE=0            # 完全关掉
+THAW_INTERVAL=60         # 或放慢到 60 秒
 THAW_APPS="io.github.ccch1mneyyy.dsh_app com.example.other"
 ```
 

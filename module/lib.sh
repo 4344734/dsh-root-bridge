@@ -1,13 +1,8 @@
 #!/system/bin/sh
-# DSH Go Root Bridge watchdog.
-# Every INTERVAL seconds: restart the bridge if it died, and keep the
-# container-side client present and identical to the module copy.
-export PATH=/system/bin:/system/xbin:/product/bin
-MODDIR=${0%/*}
-PORT=${DSH_ROOT_PORT:-47913}
+# Shared helpers for the dsh-root-bridge module. Sourced, not executed.
+# Caller must set MODDIR (module directory) before sourcing.
+
 LOG=${DSH_ROOT_LOG:-/data/local/tmp/dsh-rootd.log}
-INTERVAL=${DSH_ROOT_INTERVAL:-15}
-PAYLOAD=/data/local/tmp/dsh-rootd-conn.sh
 CLIENT=usr/local/bin/dsh-root
 
 log() {
@@ -34,51 +29,22 @@ same() {
   [ -n "$a" ] && [ "$a" = "$b" ]
 }
 
-ensure_payload() {
-  if [ ! -s "$PAYLOAD" ] || ! same "$PAYLOAD" "$MODDIR/conn.sh"; then
-    cp "$MODDIR/conn.sh" "$PAYLOAD" 2>>"$LOG" && chmod 755 "$PAYLOAD" && log "payload refreshed"
-  fi
-}
-
-bridge_alive() {
-  pgrep -f "nc -L -s 127.0.0.1 -p $PORT" >/dev/null 2>&1
-}
-
-start_bridge() {
-  ensure_payload
-  pkill -f "nc -L -s 127.0.0.1 -p $PORT" 2>/dev/null
-  sleep 1
-  setsid /system/bin/toybox nc -L -s 127.0.0.1 -p "$PORT" /system/bin/sh "$PAYLOAD" </dev/null >/dev/null 2>&1 &
-  sleep 1
-  if bridge_alive; then
-    log "bridge up on $PORT"
-  else
-    log "bridge FAILED to start on $PORT"
-  fi
-}
-
+# Copy the container-side client when it is missing or not the module's version.
 ensure_client() {
   ROOTFS=$(find_rootfs)
   if [ -z "$ROOTFS" ]; then
     log "container rootfs not found; client not checked"
-    return
+    return 1
   fi
   T="$ROOTFS/$CLIENT"
   if [ ! -s "$T" ] || ! same "$T" "$MODDIR/dsh-root"; then
     mkdir -p "$ROOTFS/usr/local/bin" 2>/dev/null
     if cp "$MODDIR/dsh-root" "$T" 2>/dev/null && chmod 755 "$T" 2>/dev/null; then
       log "client installed ($T)"
-    else
-      log "client install FAILED ($T)"
+      return 0
     fi
+    log "client install FAILED ($T)"
+    return 1
   fi
+  return 0
 }
-
-log "watchdog start pid $$ (port $PORT, every ${INTERVAL}s)"
-start_bridge
-ensure_client
-while true; do
-  sleep "$INTERVAL"
-  bridge_alive || start_bridge
-  ensure_client
-done

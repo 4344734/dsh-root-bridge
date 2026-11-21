@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.5
+
+- 去掉周期轮询：桥改成父进程 `wait` 监督，退出即重拉（健康时零唤醒）
+- 客户端补回改成 `inotifyd` 文件事件驱动，开机只检查一次
+- 解冻助手：默认 5 秒 → 30 秒，轮询改用 shell 内建 `read` 不再 fork；
+  可用 `THAW_ENABLE=0` / `THAW_INTERVAL` 调整
+- 实测空闲唤醒：旧版 156 次/分 → 新版 2 次/分
+
 ## v1.4
 
 - 解冻名单可配置：`/data/adb/dsh-root-bridge.conf` 的 `THAW_APPS`（默认只解冻 DSH Go）

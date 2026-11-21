@@ -3,12 +3,16 @@
 DATA_DIR=/data/local/tmp
 
 pkill -f 'dsh-root-bridge/[w]atch.sh' 2>/dev/null
+pkill -f 'dsh-root-bridge/[b]ridge.sh' 2>/dev/null
+pkill -f 'dsh-root-bridge/[c]lient-watch.sh' 2>/dev/null
 pkill -f 'dsh-root-bridge/[t]haw.sh' 2>/dev/null
+pkill -f 'dsh-client-event.sh' 2>/dev/null
 pkill -f dsh-rootd-conn.sh 2>/dev/null
 
 rm -f "$DATA_DIR/dsh-rootd-conn.sh"
 rm -f "$DATA_DIR/dsh-rootd.log"
 rm -f "$DATA_DIR/dsh-thaw.log"
+rm -f "$DATA_DIR/dsh-client-event.sh"
 
 for base in /data/user/0 /data/data; do
   f="$base/io.github.ccch1mneyyy.dsh_app/files/runtime/rootfs/usr/local/bin/dsh-root"
