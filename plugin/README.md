@@ -6,7 +6,7 @@
 交给 Android 系统侧执行，输出和退出码原样返回。
 
 > 这是 **DSH 插件**（装在 DSH 主机上的 npm 包）。真正的 root 能力来自配套的
-> **KernelSU 模块** [`dsh-root-bridge`](https://github.com/<你的GitHub用户名>/dsh-root-bridge)，
+> **KernelSU 模块** [`dsh-root-bridge`](https://github.com/4344734/dsh-root-bridge)，
 > 先装模块、再装插件。
 
 ## 为什么需要
@@ -18,7 +18,7 @@ DSH Go 的本机引擎跑在 proot 里，容器里的 `uid=0` 是假 root：`su`
 ## 安装
 
 1. **先装 KernelSU 模块**（提供 root 桥）：
-   到 [Releases](https://github.com/<你的GitHub用户名>/dsh-root-bridge/releases) 下载
+   到 [Releases](https://github.com/4344734/dsh-root-bridge/releases) 下载
    `dsh-root-bridge-v1.5.zip`，KernelSU → 模块 → 安装 → 重启。
    重启后在 DSH 的终端里确认：`dsh-root --status`
 2. **再装这个插件**：

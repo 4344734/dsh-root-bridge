@@ -2,11 +2,11 @@
 
 一共三个地方：GitHub、npm、DSH Go 插件市场。按顺序做，每一步只动一次。
 
-先把 `<你的GitHub用户名>` 和 `LICENSE` 里的 `<YOUR NAME>` 换成你自己的（下面有命令）。
+先把 `4344734` 和 `LICENSE` 里的 `<YOUR NAME>` 换成你自己的（下面有命令）。
 
 ```sh
 cd /root/workspace/dsh-root-bridge
-grep -rl '<你的GitHub用户名>' . | xargs sed -i 's/<你的GitHub用户名>/你的名字/g'
+grep -rl '4344734' . | xargs sed -i 's/4344734/你的名字/g'
 sed -i 's/<YOUR NAME>/你的名字/g' LICENSE
 ```
 
