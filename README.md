@@ -27,7 +27,6 @@ DSH Go 的本机引擎跑在 proot 里，容器里的 `uid=0` 是假 root：`su`
 - 真 root：文件读写、`/proc`、`/sys`、`iptables`、`setenforce`、`screencap`、`dumpsys` 等
 - 自愈：桥进程被杀立即重拉；App 更新把容器里的 `dsh-root` 删掉或换旧会立刻补回（事件驱动，平时零轮询）
 - 流式输出、超时、换 uid、文件上传下载、后台任务
-- 可选 ColorOS 速冻解冻助手（默认只看 DSH Go）
 
 ## 安装模块
 
@@ -79,13 +78,11 @@ dsh-root --jobs / --job <id> / --kill <id>
 文件、系统、`dumpsys`、`screencap`、`iptables`、`/proc`、`/sys` 都正常。
 需要操作界面的话，用 DSH Go 自带的手机操控（走 Shizuku）。
 
-## 省电设计（模块 v1.5 起）
+## 省电设计
 
 - 桥挂掉：监督进程立即重拉，健康时零唤醒
 - 容器客户端：开机检查一次 + `inotifyd` 文件事件补回，不轮询
-- 解冻助手默认 30 秒一次，可关：`/data/adb/dsh-root-bridge.conf` 里 `THAW_ENABLE=0`
-
-实测空闲唤醒：旧版 156 次/分 → v1.5 2 次/分。
+- 空闲时没有周期任务（v1.5 里的解冻助手已在 v1.6 移除）
 
 ## 安全
 

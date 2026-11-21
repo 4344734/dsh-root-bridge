@@ -1,6 +1,6 @@
 id=dsh-root-bridge
 name=DSH Go Root Bridge
-version=1.5
-versionCode=6
+version=1.6
+versionCode=7
 author=DSH Go
-description=给 DSH Go 容器一条 root 命令通道（仅 127.0.0.1:47913，token 校验）。桥挂掉立即重拉、客户端靠文件事件自动补回，平时不轮询；另带可配置的 ColorOS 解冻助手。
+description=给 DSH Go 容器一条 root 命令通道（仅 127.0.0.1:47913，token 校验）。桥挂掉立即重拉、客户端靠文件事件自动补回，平时不轮询。

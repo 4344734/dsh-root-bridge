@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.6
+
+- 发布版不再附带 ColorOS 解冻助手（该助手此前每 30 秒检查一次 cgroup，属于可选的省电争议功能）
+- 模块只保留 root 桥和容器客户端看护
+
 ## 插件 0.1.0（npm: dsh-root-bridge）
 
 - 新增 `root_exec` 工具：通过 KernelSU 模块的 root 桥，在 Android 侧以真 root 执行命令
