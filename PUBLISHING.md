@@ -23,8 +23,8 @@ git push -u origin main
 1. 改 `module/module.prop` 的 `version` / `versionCode`
 2. 改 `CHANGELOG.md`，运行 `sh build.sh`
 3. GitHub → Releases → Draft a new release
-4. Tag：`v1.4`；标题：`DSH Go Root Bridge v1.4`
-5. 上传 `dist/dsh-root-bridge-v1.4.zip`
+4. Tag：`v1.5`；标题：`DSH Go Root Bridge v1.5`
+5. 上传 `dist/dsh-root-bridge-v1.5.zip`
 6. 发布
 
 ## 提交到 KernelSU 模块仓库（可选）

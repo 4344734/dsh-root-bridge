@@ -13,7 +13,7 @@ DSH Go 的本机引擎跑在 proot 里，容器里的 `uid=0` 是假 root：`su`
 ## 特性
 
 - 真 root：文件读写、`/proc`、`/sys`、`iptables`、`setenforce`、`screencap`、`dumpsys` 等
-- 自愈：桥进程被杀 15 秒内自动重拉；App 更新把容器里的 `dsh-root` 删掉或换旧会自动补回
+- 自愈：桥进程被杀立即重拉；App 更新把容器里的 `dsh-root` 删掉或换旧会立刻补回（事件驱动，平时零轮询）
 - 流式输出、超时、换 uid、文件上传下载、后台任务
 - 可选 ColorOS 速冻解冻助手（默认只看 DSH Go）
 
